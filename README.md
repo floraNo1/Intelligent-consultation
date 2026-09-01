@@ -1,21 +1,111 @@
-此项目是山东大学（威海）大二暑假大作业的一部分，来自22级数科班关东组。
+# Intelligent Medical Consultation Prototype
 
-作业要求如下：
+> A course prototype that connects a Qianfan conversational model, department extraction, and an optional browser-assisted doctor-search workflow.
 
-①项目创建与命名：建立项目“山东大学威海数据科学实验班_问诊挂号智能体_小组成员名字”。
+本项目来自山东大学（威海）数据科学实验班课程实践。它展示了一条完整但简化的交互链路：接收用户描述、调用大模型生成回复、从回复中提取候选科室，并在用户明确启用时，通过浏览器自动化寻找相关医生页面。
 
-②智能体开发： 利用Chinese-medical-dialogue-data数据集训练文心一言模型，开发能够模拟医生问诊的对话系统。 实现逻辑包括：智能体主动提问、根据患者回答进行症状分析、给出初步诊断。
+> **Safety boundary:** this repository is an educational interface prototype. It does not provide medical diagnosis, treatment advice, or a production appointment service. Users should consult qualified medical professionals and complete any appointment action themselves.
 
-使用pyautogui库（确保在本地环境正确安装并配置好）编写脚本，实现结合患者的时间自动 推荐百度健康平台上的医生以便患者挂号。注意，此操作需在遵守网站使用条款的前提下进 行，录屏是需对关键信息打马赛克或显示为星号。
+## Architecture
 
-③安全性与隐私：在进行自动挂号功能开发时，务必确保不会泄露用户隐私信息，且操作符合平台政策。
+```mermaid
+flowchart LR
+    UI[Flask chat UI] --> Routes[HTTP routes]
+    Routes --> LLM[Qianfan chat completion]
+    LLM --> Extractor[Department extractor]
+    Extractor --> UI
+    Routes -->|optional and disabled by default| Browser[Selenium doctor-page search]
+    Browser --> Handoff[Return page URL for manual confirmation]
+```
 
-④记录与分享：使用markdown和屏幕截图详细记录智能体开发过程，特别注意说明如何结合pyautogui进行自动化操作的部分。
+The code deliberately separates conversational inference from browser automation. The automation path is disabled by default and stops at a doctor-information page instead of confirming a real appointment.
 
-⑤预留测试时间：在截止日期前留出足够的时间进行测试，确保项目功能完善，视频质量良好。
+## Repository structure
 
-app.py为项目的主要代码 ；压缩包中为项目设计的所有代码 ；三个md文件为代码的详细解释
+```text
+.
+├── app.py                       # development entry point
+├── medical_agent/
+│   ├── __init__.py              # Flask application factory
+│   ├── booking.py               # optional Selenium workflow
+│   ├── departments.py           # department vocabulary and extraction
+│   └── routes.py                # HTTP endpoints
+├── templates/chat1.html
+├── static/
+├── docs/course-notes/           # original course explanations
+├── .env.example
+├── .gitignore
+└── requirements.txt
+```
 
-（其中有涉及千帆模型的AK与SK需要根据个人账户设定——
+## Main interaction flow
 
-详情也可查看AISTUDIO，链接为：https://aistudio.baidu.com/projectdetail/8237104?sUid=5563173&shared=1&ts=1723693061507
+1. The browser sends a short user message to `POST /chat`.
+2. The backend calls the configured Qianfan model.
+3. A conservative vocabulary matcher extracts department names from the generated reply.
+4. The UI presents the response and retains the suggested department for the optional doctor-search action.
+5. When browser automation is explicitly enabled, `POST /autoregister` searches for a relevant doctor page and returns its URL for manual review.
+
+## Local setup
+
+The project is retained primarily as an inspectable course artifact. A basic local setup is:
+
+```bash
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Copy `.env.example` to `.env`, then provide your own Qianfan credentials:
+
+```text
+QIANFAN_ACCESS_KEY=replace-me
+QIANFAN_SECRET_KEY=replace-me
+```
+
+Start the Flask development server:
+
+```bash
+python app.py
+```
+
+The chat page is available at `http://127.0.0.1:5000`.
+
+## Optional browser workflow
+
+Browser automation is off by default. To inspect the historical Selenium workflow, set:
+
+```text
+BOOKING_AUTOMATION_ENABLED=true
+BOOKING_SEARCH_URL=https://example.com/doctor-search
+```
+
+The real target page, selectors, browser version, and website policy may have changed since the original course demonstration. Review and update them before any controlled test. The code does not click a final appointment-confirmation button.
+
+## Dependencies and external systems
+
+- Flask serves the page and JSON endpoints.
+- Qianfan provides the conversational completion API.
+- Jieba performs simple Chinese vocabulary matching.
+- Selenium drives the optional browser handoff.
+- The frontend uses the original HTML/CSS/jQuery course interface recovered from the project archive.
+
+## What this prototype demonstrates
+
+- integration of an external language-model API into a small web application;
+- rule-based extraction after model generation;
+- a clear boundary between conversational output and external side effects;
+- packaging of the original page, backend, and course documentation as normal source files rather than a binary ZIP.
+
+## Known limitations
+
+- Each `/chat` request is independent; durable multi-turn dialogue state is not implemented.
+- Department extraction uses a fixed vocabulary and may miss synonyms or return an unsuitable department.
+- Model output is unverified and must not be treated as medical advice.
+- Browser selectors are brittle and depend on a third-party website.
+- There are no automated tests or stable offline fixtures for the external services.
+
+## Historical notes
+
+The detailed Chinese explanations from the original submission are preserved in [`docs/course-notes`](docs/course-notes). The former `chat.zip` and bundled EdgeDriver have been removed from the public source layout; the recovered templates and static assets now live in their standard Flask directories.

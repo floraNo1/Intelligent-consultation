@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8">
+    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" name="viewport"/>
+    <title>自动挂号机</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+
+<body data-theme="orange">
+    <!-- 修改时间选择器为只选择日期 -->
+    <input type="date" id="date-picker"/>
+    <button id="confirm-time" style="margin-left: 10px;">确定</button>
+
+    <div class="app">
+        <header class="header">
+            <button class="header__back-button" aria-label="Back"></button>
+            <h1 class="header__title">关东组极速咨询</h1>
+            <div class="header__user-icon" aria-label="User Profile"></div>
+        </header>
+        <nav class="breadcrumb">
+            <ul class="breadcrumb__list">
+                <li class="breadcrumb__item breadcrumb__item--active">
+                    <a href="#" class="breadcrumb__link">提交问题</a>
+                </li>
+                <li class="breadcrumb__item">
+                    <a href="#" class="breadcrumb__link" id="auto-register">自动挂号</a>
+                </li>
+            </ul>
+        </nav>
+        <div class="wrapper">
+            <div class="chat-area">
+                <div class="hint">
+                    请仔细阅读 用户服务相关声明，继续咨询表明您已阅读<br>
+                    并同意前述声明。如非复诊服务方将仅提供医疗咨询服务。
+                </div>
+                <div class="chat-area-main" id="chat-body" style="height: 100%">
+                    <!-- 聊天记录 -->
+                </div>
+                <div class="chat-area-footer">
+                    <input type="text" id="message" class="chat_message_up" placeholder="想与自动挂号机聊些什么..."/>
+                    <button class="detail-button" id="send-button">
+                        <span class="d-none d-md-inline-block me-2"> Send </span>
+                        <i class="zmdi zmdi-mail-send"> </i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    $(document).ready(function () {
+        var chatBody = $('#chat-body');
+        var messageInput = $('#message');
+        var sendButton = $('#send-button');
+        var autoRegisterButton = $('#auto-register');
+        var datePicker = $('#date-picker');
+        var confirmTimeButton = $('#confirm-time'); // 确认按钮
+        var selectedDate = ''; // 用于存储用户选择的日期
+        var diseaseName = '';  // 用于存储科室名称
+
+        // 定义自动询问的时间间隔
+        var inactivityTimeout = 30000; // 30秒不活跃后自动询问
+        var inactivityTimer;
+
+        // 页面加载时自动获取问候语
+        $.ajax({
+            url: '/greet',
+            method: 'GET',
+            success: function (response) {
+                appendMessage('小翼', response.reply);
+            },
+            error: function (error) {
+                console.log("Error:", error);
+            }
+        });
+
+        // Function to send a message
+        function sendMessage() {
+            var message = messageInput.val();
+            if (message.trim() !== '') {
+                appendMessage('我', message);
+                messageInput.val('');
+
+                $.ajax({
+                    url: '/chat',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({message: message, timestamp: selectedDate}), // 传递用户选择的日期
+                    success: function (response) {
+                        appendMessage('小翼', response.reply);
+
+                        if (response.disease_name) {
+                            diseaseName = response.disease_name;
+                        }
+                    },
+                    error: function (error) {
+                        console.log("Error:", error);
+                    }
+                });
+
+                // 重置不活跃计时器
+                resetInactivityTimer();
+            }
+        }
+
+        // 确定按钮点击事件，获取用户选择的日期
+        confirmTimeButton.click(function () {
+            selectedDate = datePicker.val(); // 获取用户选择的日期
+            if (selectedDate) {
+                alert("您选择的日期是：" + selectedDate);
+            }
+        });
+
+        // 点击发送按钮时触发
+        sendButton.click(function () {
+            sendMessage();
+        });
+
+        // 按下回车键时触发
+        messageInput.keypress(function (e) {
+            if (e.which === 13) { // 按下回车键
+                sendMessage();
+            }
+        });
+
+        // 自动挂号
+        autoRegisterButton.click(function (e) {
+            e.preventDefault();
+            if (diseaseName) {
+                $.ajax({
+                    url: '/autoregister',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({disease_name: diseaseName, timestamp: selectedDate}), // 传递用户选择的日期
+                    success: function (response) {
+                        if (response.current_url) {
+                            alert('Doctor details page URL: ' + response.current_url);
+                        } else {
+                            alert('No valid doctor details page URL found.');
+                        }
+                    },
+                    error: function (error) {
+                        console.log("Error:", error);
+                    }
+                });
+            } else {
+                alert('未检测到有效的科室名称。');
+            }
+        });
+
+        // 在聊天记录区域中添加一条消息
+        function appendMessage(from, message) {
+            console.log(from)
+            console.log(message)
+            var messageElement = $('<div class="chat-msg"></div>');
+            var messagePend = $('<div class="chat-msg-profile"></div>');
+            var messageContentElement = $('<div class="chat-msg-text" style="margin-left: 12px;"></div>');
+
+            var avatarSrc = (from === '我') ? '{{ url_for('static', filename='img/user.png') }}' : '{{ url_for('static', filename='img/gpt.png') }}';
+            var avatarElement = $('<img class="chat-msg-img" src="' + avatarSrc + '" alt=""><div class="chat-msg-date">' + from + '</div>');
+
+            // Treat both user and model messages as text, not executable HTML.
+            messageContentElement.text(message);
+
+            messagePend.append(avatarElement);
+            messageElement.append(messagePend);
+            messageElement.append(messageContentElement);
+            if (from === '我') {
+                messageElement.addClass('owner');
+            }
+            chatBody.append(messageElement);
+            chatBody.scrollTop(chatBody[0].scrollHeight);
+        }
+
+        // 设置不活跃计时器
+        function setInactivityTimer() {
+            inactivityTimer = setTimeout(function () {
+                appendMessage('小翼', '请问您是否需要小翼帮助自动挂号？如果需要，请通过左上角日期选择器告诉我您希望挂号的日期~');
+            }, inactivityTimeout);
+        }
+
+        // 重置不活跃计时器
+        function resetInactivityTimer() {
+            clearTimeout(inactivityTimer);
+            setInactivityTimer();
+        }
+
+        // 初始化计时器
+        setInactivityTimer();
+
+        // 监听用户输入事件以重置计时器
+        messageInput.on('input', resetInactivityTimer);
+        sendButton.on('click', resetInactivityTimer);
+    });
+    document.addEventListener("DOMContentLoaded", function() {
+            var datePicker = document.getElementById('date-picker');
+
+            // 获取当前日期
+            var today = new Date();
+            var year = today.getFullYear();
+            var month = ("0" + (today.getMonth() + 1)).slice(-2); // 月份从0开始，所以需要加1
+            var day = ("0" + today.getDate()).slice(-2); // 确保日期为两位数
+
+            var currentDate = year + "-" + month + "-" + day;
+
+            // 设置时间选择器的值
+            datePicker.value = currentDate;
+        });
+    </script>
+
+</body>
+</html>
