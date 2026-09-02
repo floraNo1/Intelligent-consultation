@@ -1,5 +1,7 @@
 # Intelligent Medical Consultation Prototype
 
+> **Earlier undergraduate course project, retained for record.**
+>
 > A course prototype that connects a Qianfan conversational model, department extraction, and an optional browser-assisted doctor-search workflow.
 
 本项目来自山东大学（威海）数据科学实验班课程实践。它展示了一条完整但简化的交互链路：接收用户描述、调用大模型生成回复、从回复中提取候选科室，并在用户明确启用时，通过浏览器自动化寻找相关医生页面。
@@ -109,3 +111,4 @@ The real target page, selectors, browser version, and website policy may have ch
 ## Historical notes
 
 The detailed Chinese explanations from the original submission are preserved in [`docs/course-notes`](docs/course-notes). The former `chat.zip` and bundled EdgeDriver have been removed from the public source layout; the recovered templates and static assets now live in their standard Flask directories.
+
